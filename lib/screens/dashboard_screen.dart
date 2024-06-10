@@ -16,6 +16,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<Interaction> _interactions = [];
   final List<Category> _categories = [];
 
+  DateTime _currentDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
+
   @override
   void initState() {
     super.initState();
@@ -103,18 +105,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  int _countMonthlyInteractions() {
-    final now = DateTime.now();
+  int _countMonthlyInteractions(DateTime date) {
     return _interactions
         .where((interaction) =>
-            interaction.date.year == now.year && interaction.date.month == now.month)
+            interaction.date.year == date.year && interaction.date.month == date.month)
         .length;
+  }
+
+  int _daysLeftInMonth(DateTime date) {
+    final nextMonth = DateTime(date.year, date.month + 1, 1);
+    final lastDayOfMonth = nextMonth.subtract(Duration(days: 1));
+    final today = DateTime.now();
+    if (date.year == today.year && date.month == today.month) {
+      return lastDayOfMonth.day - today.day;
+    } else {
+      return lastDayOfMonth.day;
+    }
+  }
+
+  void _previousMonth() {
+    setState(() {
+      _currentDate = DateTime(_currentDate.year, _currentDate.month - 1, 1);
+    });
+  }
+
+  void _nextMonth() {
+    setState(() {
+      _currentDate = DateTime(_currentDate.year, _currentDate.month + 1, 1);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final int interactionCount = _countMonthlyInteractions();
+    final int interactionCount = _countMonthlyInteractions(_currentDate);
     final double progress = (interactionCount / 100).clamp(0.0, 1.0);
+    final int daysLeft = _daysLeftInMonth(_currentDate);
 
     return Scaffold(
       appBar: AppBar(
@@ -145,8 +170,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_left),
+                      onPressed: _previousMonth,
+                    ),
+                    Text(
+                      '${_currentDate.year}-${_currentDate.month}',
+                      style: TextStyle(fontSize: 20),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.arrow_right),
+                      onPressed: _nextMonth,
+                    ),
+                  ],
+                ),
                 Text(
                   'Interacciones este mes: $interactionCount/100',
+                  style: TextStyle(fontSize: 20),
+                ),
+                Text(
+                  'Días restantes: $daysLeft',
                   style: TextStyle(fontSize: 20),
                 ),
                 SizedBox(height: 10),
