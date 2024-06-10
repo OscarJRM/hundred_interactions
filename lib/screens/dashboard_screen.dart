@@ -42,28 +42,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _loadCategories() {
-    final List<String>? categoryStrings = _prefs.getStringList('categories');
-    if (categoryStrings != null) {
-      _categories.clear();
-      _categories.addAll(categoryStrings.map((string) => Category.fromString(string)));
-    } else {
-      _categories.addAll([
-        Category(id: '1', name: 'Trabajo'),
-        Category(id: '2', name: 'Social'),
-        Category(id: '3', name: 'Ejercicio'),
-      ]);
-    }
+  final List<String>? categoryStrings = _prefs.getStringList('categories');
+  if (categoryStrings != null && categoryStrings.isNotEmpty) {
+    _categories.clear();
+    _categories.addAll(categoryStrings.map((string) => Category.fromString(string)));
+  } else {
+    _categories.clear();
+    _categories.addAll([
+      Category(id: '1', name: 'Trabajo'),
+      Category(id: '2', name: 'Social'),
+      Category(id: '3', name: 'Ejercicio'),
+    ]);
+    _saveCategories();  // Guardar las categorías predefinidas si no existen
   }
+}
+
 
   Future<void> _saveInteractions() async {
     final List<String> interactionStrings = _interactions.map((interaction) => interaction.toString()).toList();
     await _prefs.setStringList('interactions', interactionStrings);
   }
 
-  Future<void> _saveCategories() async {
-    final List<String> categoryStrings = _categories.map((category) => category.toString()).toList();
-    await _prefs.setStringList('categories', categoryStrings);
-  }
+ Future<void> _saveCategories() async {
+  final List<String> categoryStrings = _categories.map((category) => category.toString()).toList();
+  await _prefs.setStringList('categories', categoryStrings);
+}
+
 
   void _addInteraction(String description, String category) {
     final newInteraction = Interaction(
@@ -76,6 +80,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _interactions.add(newInteraction);
       _saveInteractions();
+    });
+  }
+
+  void _editInteraction(String id, String description, String category) {
+    setState(() {
+      final index = _interactions.indexWhere((interaction) => interaction.id == id);
+      if (index != -1) {
+        _interactions[index] = Interaction(
+          id: id,
+          description: description,
+          category: category,
+          date: _interactions[index].date,
+        );
+        _saveInteractions();
+      }
     });
   }
 
@@ -210,6 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return InteractionCard(
                   interaction: _interactions[index],
                   onDelete: () => _removeInteraction(_interactions[index].id),
+                  onEdit: () => _showEditInteractionDialog(context, _interactions[index]),
                 );
               },
             ),
@@ -278,6 +298,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _showEditInteractionDialog(BuildContext context, Interaction interaction) {
+    final _descriptionController = TextEditingController(text: interaction.description);
+    String? _selectedCategory = interaction.category;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Editar Interacción'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _descriptionController,
+              decoration: InputDecoration(labelText: 'Descripción'),
+            ),
+            DropdownButtonFormField<String>(
+              value: _selectedCategory,
+              items: _categories.map((category) {
+                return DropdownMenuItem<String>(
+                  value: category.name,
+                  child: Text(category.name),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCategory = value;
+                });
+              },
+              decoration: InputDecoration(labelText: 'Categoría'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancelar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+          TextButton(
+            child: Text('Guardar'),
+            onPressed: () {
+              if (_descriptionController.text.isNotEmpty && _selectedCategory != null) {
+                _editInteraction(interaction.id, _descriptionController.text, _selectedCategory!);
+                Navigator.of(ctx).pop();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showAddCategoryDialog(BuildContext context) {
     final _nameController = TextEditingController();
 
@@ -311,53 +384,110 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showManageCategoriesDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Gestionar Categorías'),
-        content: Container(
-          width: double.minPositive,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _categories.length,
-                  itemBuilder: (ctx, index) {
-                    return ListTile(
-                      title: Text(_categories[index].name),
-                      trailing: IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () {
-                          _removeCategory(_categories[index]);
-                          Navigator.of(ctx).pop();
-                          _showManageCategoriesDialog(context); // Volver a abrir el diálogo para reflejar los cambios
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  _showAddCategoryDialog(context);
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Gestionar Categorías'),
+      content: Container(
+        width: double.minPositive,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Expanded(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _categories.length,
+                itemBuilder: (ctx, index) {
+                  return ListTile(
+                    title: Text(_categories[index].name),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.edit, color: Colors.blue),
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            _showEditCategoryDialog(context, _categories[index]);
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            _removeCategory(_categories[index]);
+                            Navigator.of(ctx).pop();
+                            _showManageCategoriesDialog(context); // Volver a abrir el diálogo para reflejar los cambios
+                          },
+                        ),
+                      ],
+                    ),
+                  );
                 },
-                child: Text('Añadir Categoría'),
               ),
-            ],
-          ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _showAddCategoryDialog(context);
+              },
+              child: Text('Añadir Categoría'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            child: Text('Cerrar'),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-            },
-          ),
-        ],
       ),
-    );
-  }
+      actions: [
+        TextButton(
+          child: Text('Cerrar'),
+          onPressed: () {
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ],
+    ),
+  );
 }
+
+
+  void _showEditCategoryDialog(BuildContext context, Category category) {
+  final _nameController = TextEditingController(text: category.name);
+
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Editar Categoría'),
+      content: TextField(
+        controller: _nameController,
+        decoration: InputDecoration(labelText: 'Nombre de la Categoría'),
+      ),
+      actions: [
+        TextButton(
+          child: Text('Cancelar'),
+          onPressed: () {
+            Navigator.of(ctx).pop();
+          },
+        ),
+        TextButton(
+          child: Text('Guardar'),
+          onPressed: () {
+            if (_nameController.text.isNotEmpty) {
+              _editCategory(category.id, _nameController.text);
+              Navigator.of(ctx).pop();
+            }
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+void _editCategory(String id, String newName) {
+  setState(() {
+    final index = _categories.indexWhere((category) => category.id == id);
+    if (index != -1) {
+      _categories[index] = Category(id: id, name: newName);
+      _saveCategories();
+    }
+  });
+}
+
+}
+
